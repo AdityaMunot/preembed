@@ -137,27 +137,12 @@ register_scorer(name, weight=0.1)(fn)
 clear_scorers()
 ```
 
-Full reference: [docs/API.md](docs/API.md)
-
-## Documentation
-
-| Doc | What |
-|---|---|
-| [API Reference](docs/API.md) | Full public API with examples |
-| [Development](docs/DEVELOPMENT.md) | Local setup and troubleshooting |
-| [Benchmarks](docs/BENCHMARKS.md) | Results, scoring formula, methodology |
-| [Publishing](docs/PUBLISHING.md) | Release checklist |
-| [Status](docs/STATUS.md) | Current project state |
-| [Changelog](CHANGELOG.md) | Version history |
-| [Contributing](CONTRIBUTING.md) | PR guidelines |
-
 ## Development
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-
-pytest                                    # 124 tests
+pytest
 ```
 
 ## License
