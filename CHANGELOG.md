@@ -4,6 +4,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-29
+
+### Fixed
+- sdist now includes LICENSE file.
+- Structured error types (`PreembedError`) with context from native extension.
+- Rust FFI validates chunk_size, overlap, and dedupe threshold before processing.
+
+### Added
+- `PreembedError` exception for native extension errors.
+- Linux ARM (aarch64) wheel builds.
+- macOS Intel (x86_64) wheel builds.
+- CI smoke test: builds wheel, installs, verifies quickstart.
+- Automated PyPI publishing via Trusted Publishing.
+
 ## [0.1.0] - 2026-04-29
 
 ### Added

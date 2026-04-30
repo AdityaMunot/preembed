@@ -9,6 +9,17 @@ from collections.abc import Iterable
 from . import preembed_core as _core
 from .types import Chunk, DedupeResult, Tokenizer
 
+
+class PreembedError(RuntimeError):
+    """Raised when the native extension encounters an unexpected error."""
+
+
+def _native_call(fn, *args, context: str = ""):
+    try:
+        return fn(*args)
+    except Exception as e:
+        raise PreembedError(f"{context}: {e}") from e
+
 # --- Custom scorer registry ---
 
 _custom_scorers: list[tuple[str, float, object]] = []  # (name, weight, fn)
@@ -44,7 +55,7 @@ def clean_text(text: str) -> str:
         raise TypeError("clean_text() expects a string.")
 
     normalized = unicodedata.normalize("NFKC", text)
-    return _core.clean_text(_unescape_if_needed(normalized))
+    return _native_call(_core.clean_text, _unescape_if_needed(normalized), context="clean_text")
 
 
 def _unescape_if_needed(text: str) -> str:
@@ -72,7 +83,7 @@ def chunk_text(
             text, chunk_size, overlap, preserve_headings, tokenizer
         )
 
-    return _core.chunk_text(text, chunk_size, overlap, preserve_headings)
+    return _native_call(_core.chunk_text, text, chunk_size, overlap, preserve_headings, context="chunk_text")
 
 
 def _validate_chunk_config(text: str, chunk_size: int, overlap: int) -> None:
@@ -261,8 +272,10 @@ def dedupe_chunks(
         if not isinstance(value, bool):
             raise TypeError(f"{name} must be a boolean.")
 
-    result = _core.dedupe_chunks(
-        chunk_texts, near_duplicate_threshold, exact, normalized, near_duplicates
+    result = _native_call(
+        _core.dedupe_chunks,
+        chunk_texts, near_duplicate_threshold, exact, normalized, near_duplicates,
+        context="dedupe_chunks",
     )
 
     if not return_stats:
@@ -304,7 +317,7 @@ def score_chunks(chunks):
             score=item["score"],
             warnings=item["warnings"],
         )
-        for item in _core.score_chunks(chunk_texts)
+        for item in _native_call(_core.score_chunks, chunk_texts, context="score_chunks")
     ]
 
     if not _custom_scorers:

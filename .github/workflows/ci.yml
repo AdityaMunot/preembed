@@ -55,6 +55,55 @@ jobs:
       - name: Run Python tests
         run: python -m pytest -q --tb=short --cov=preembed --cov-report=term-missing
 
+  smoke-test:
+    name: Smoke Test (wheel install)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build and install wheel
+        run: |
+          python -m pip install maturin
+          maturin build --release --out dist
+          python -m pip install dist/*.whl
+
+      - name: Verify import and quickstart
+        run: |
+          python -c "
+          from preembed import Pipeline, clean_text, chunk_text, dedupe_chunks, score_chunks, __version__
+          print(f'preembed {__version__}')
+
+          # Clean
+          cleaned = clean_text('<html><script>x</script><p>Hello world</p></html>')
+          assert 'Hello world' in cleaned
+          assert '<script>' not in cleaned
+
+          # Chunk
+          chunks = chunk_text('word ' * 200, chunk_size=50, overlap=5)
+          assert len(chunks) > 1
+
+          # Dedupe
+          deduped = dedupe_chunks(['a b c'] * 3)
+          assert len(deduped) == 1
+
+          # Score
+          scored = score_chunks(['This is a test chunk with enough words for scoring.'])
+          assert 0.0 <= scored[0].score <= 1.0
+
+          # Pipeline
+          result = Pipeline(chunk_size=50, overlap=5).run('word ' * 200)
+          assert result.stats.total_chunks > 0
+
+          print('all smoke tests passed')
+          "
+
   rust-tests:
     name: Rust Tests
     runs-on: ubuntu-latest

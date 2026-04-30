@@ -13,12 +13,60 @@ permissions:
 
 jobs:
   build-linux-wheels:
-    name: Build Linux Wheels (Python ${{ matrix.python-version }})
+    name: Build Linux ${{ matrix.target }} wheels (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
+        target: [x86_64, aarch64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          command: build
+          args: --release --out dist -i python${{ matrix.python-version }}
+          manylinux: auto
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.target }}-py${{ matrix.python-version }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  build-macos-wheels:
+    name: Build macOS ${{ matrix.target }} wheels (Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            python-version: "3.10"
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            python-version: "3.11"
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            python-version: "3.12"
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            python-version: "3.10"
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            python-version: "3.11"
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            python-version: "3.12"
 
     steps:
       - uses: actions/checkout@v4
@@ -32,24 +80,22 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
+          target: ${{ matrix.target }}
           command: build
-          args: --release --out dist -i python${{ matrix.python-version }}
-          manylinux: auto
+          args: --release --out dist
 
-      - name: Upload wheel artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: wheels-linux-py${{ matrix.python-version }}
+          name: wheels-macos-${{ matrix.target }}-py${{ matrix.python-version }}
           path: dist/*.whl
           if-no-files-found: error
 
-  build-native-wheels:
-    name: Build ${{ matrix.os }} Wheels (Python ${{ matrix.python-version }})
-    runs-on: ${{ matrix.os }}
+  build-windows-wheels:
+    name: Build Windows wheels (Python ${{ matrix.python-version }})
+    runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12"]
 
     steps:
@@ -65,17 +111,16 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist -i python
+          args: --release --out dist
 
-      - name: Upload wheel artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}-py${{ matrix.python-version }}
+          name: wheels-windows-py${{ matrix.python-version }}
           path: dist/*.whl
           if-no-files-found: error
 
   build-sdist:
-    name: Build Source Distribution
+    name: Build source distribution
     runs-on: ubuntu-latest
 
     steps:
@@ -93,8 +138,7 @@ jobs:
           command: sdist
           args: --out dist
 
-      - name: Upload sdist artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: sdist
           path: dist/*.tar.gz

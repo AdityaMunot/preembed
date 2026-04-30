@@ -1,8 +1,10 @@
 pub mod clean;
 pub mod chunk;
 pub mod dedupe;
+pub mod error;
 pub mod score;
 
+use error::PreembedError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -17,8 +19,20 @@ fn clean_text(text: &str) -> String {
 }
 
 #[pyfunction]
-fn chunk_text(text: &str, chunk_size: usize, overlap: usize, preserve_headings: bool) -> Vec<String> {
-    chunk::chunk_text(text, chunk_size, overlap, preserve_headings)
+fn chunk_text(text: &str, chunk_size: usize, overlap: usize, preserve_headings: bool) -> PyResult<Vec<String>> {
+    if chunk_size == 0 {
+        return Err(PreembedError::InvalidConfig {
+            field: "chunk_size".into(),
+            message: "must be greater than 0".into(),
+        }.into());
+    }
+    if overlap >= chunk_size {
+        return Err(PreembedError::InvalidConfig {
+            field: "overlap".into(),
+            message: format!("overlap ({overlap}) must be smaller than chunk_size ({chunk_size})"),
+        }.into());
+    }
+    Ok(chunk::chunk_text(text, chunk_size, overlap, preserve_headings))
 }
 
 #[pyfunction]
@@ -30,6 +44,12 @@ fn dedupe_chunks(
     normalized: bool,
     near_duplicates: bool,
 ) -> PyResult<PyObject> {
+    if !(0.0..=1.0).contains(&near_duplicate_threshold) {
+        return Err(PreembedError::InvalidConfig {
+            field: "near_duplicate_threshold".into(),
+            message: format!("must be between 0 and 1, got {near_duplicate_threshold}"),
+        }.into());
+    }
     let result = dedupe::dedupe_chunks_with_config(
         &chunks,
         dedupe::DedupeConfig {
@@ -119,8 +139,8 @@ fn preembed_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{chunk_text, clean_text, normalize_whitespace};
-    use crate::{dedupe, score};
+    use super::{clean_text, normalize_whitespace};
+    use crate::{chunk, dedupe, score};
 
     #[test]
     fn normalizes_whitespace() {
@@ -143,7 +163,7 @@ mod tests {
     #[test]
     fn chunks_with_overlap() {
         assert_eq!(
-            chunk_text("one two three four five", 3, 1, true),
+            chunk::chunk_text("one two three four five", 3, 1, true),
             vec!["one two three".to_string(), "three four five".to_string()]
         );
     }

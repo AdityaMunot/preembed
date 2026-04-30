@@ -7,6 +7,7 @@ __all__ = [
     "Pipeline",
     "PipelineResult",
     "PipelineStats",
+    "PreembedError",
     "Scorer",
     "Tokenizer",
     "clean_text",
@@ -19,6 +20,7 @@ __all__ = [
 
 from .pipeline import Pipeline
 from .text import (
+    PreembedError,
     chunk_text,
     clean_text,
     clear_scorers,

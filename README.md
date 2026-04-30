@@ -46,7 +46,7 @@ maturin develop --release
 ```python
 from preembed import Pipeline
 
-result = Pipeline(chunk_size=512, overlap=64).run("docs/")
+result = Pipeline(chunk_size=512, overlap=64).run("path/to/documents/")
 result.save_report("report.json")
 
 print(f"{result.stats.total_chunks} chunks, {result.stats.duplicate_ratio:.0%} duplicates removed")
