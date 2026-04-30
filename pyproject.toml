@@ -1,0 +1,59 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "preembed"
+version = "0.1.0"
+description = "High-performance document preparation toolkit for LLM and RAG pipelines."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Aditya Munot" },
+]
+keywords = ["llm", "rag", "chunking", "document-processing", "embeddings"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing",
+]
+
+[project.urls]
+Homepage = "https://github.com/AdityaMunot/preembed"
+Repository = "https://github.com/AdityaMunot/preembed"
+Documentation = "https://github.com/AdityaMunot/preembed/tree/main/docs"
+Issues = "https://github.com/AdityaMunot/preembed/issues"
+Changelog = "https://github.com/AdityaMunot/preembed/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+    "maturin>=1.5,<2",
+    "pytest>=8",
+    "pytest-cov>=5",
+]
+lint = [
+    "ruff>=0.4",
+    "mypy>=1.9",
+]
+
+[tool.setuptools.package-data]
+preembed = ["py.typed"]
+
+[tool.maturin]
+manifest-path = "rust/Cargo.toml"
+python-source = "python"
+module-name = "preembed.preembed_core"
+features = ["pyo3/extension-module"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["python"]
+markers = ["slow: large-input smoke tests (opt in with -m slow)"]
