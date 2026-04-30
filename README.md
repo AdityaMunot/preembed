@@ -82,12 +82,10 @@ Blends with the built-in scoring engine. Errors default to neutral (0.5) — won
 
 ## Performance
 
-Benchmarked on a 15 MB real-world corpus (Wikipedia, RFCs, Gutenberg, GitHub, MDN, Hacker News):
-
 | Operation | Time |
 |---|---:|
-| **Cleaning** (15 MB HTML) | 110 ms |
-| **Chunking** (2 MB cleaned text) | 31 ms |
+| **Cleaning** | 110 ms |
+| **Chunking** | 31 ms |
 | **Full pipeline** (clean + chunk + dedupe + score) | 543 ms |
 
 Native-compiled core. Deduplication uses an inverted fingerprint index — O(1) for exact/normalized matches.
