@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "High-performance document preparation toolkit for LLM and RAG pipelines."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 authors = [
     { name = "Aditya Munot" },
 ]
