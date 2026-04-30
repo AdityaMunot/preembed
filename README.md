@@ -1,5 +1,11 @@
 # preembed
 
+<p align="center">
+  <picture>
+    <img src="assets/logo.png" alt="preembed" width="400">
+  </picture>
+</p>
+
 > Clean, chunk, deduplicate, and score documents before embedding.
 
 **preembed** is a high-performance toolkit that sits between your raw documents and your vector database. It turns messy HTML, markdown, logs, and exports into high-quality, LLM-ready chunks — so your RAG pipeline retrieves better context and hallucinates less.
