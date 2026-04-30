@@ -20,6 +20,13 @@ build/
 benchmarks/results/*
 !benchmarks/results/README.md
 benchmarks/real_corpus/
+
+# Dev-only tooling
+benchmarks/
+rust/benches/
+.github/instructions/
+.github/chatmodes/
+.github/prompts/
 .env
 .env.*
 !.env.example
