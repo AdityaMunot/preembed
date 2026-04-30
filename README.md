@@ -2,7 +2,7 @@
 
 <p align="center">
   <picture>
-    <img src="assets/logo.png" alt="preembed" width="400">
+    <img src="https://raw.githubusercontent.com/AdityaMunot/preembed/main/assets/logo.png" alt="preembed" width="400">
   </picture>
 </p>
 
