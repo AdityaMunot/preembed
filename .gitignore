@@ -30,3 +30,4 @@ rust/benches/
 .env
 .env.*
 !.env.example
+.github/research/
