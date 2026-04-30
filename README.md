@@ -22,7 +22,7 @@ preembed fixes the data before it enters the pipeline:
 
 ```
 raw documents → clean → chunk → dedupe → score → embed
-                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
                         preembed handles this
 ```
 
