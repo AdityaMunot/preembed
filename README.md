@@ -6,7 +6,6 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org)
-[![Rust](https://img.shields.io/badge/Rust-Powered-orange.svg)](https://www.rust-lang.org)
 
 ## Why
 
@@ -85,29 +84,13 @@ Blends with the built-in scoring engine. Errors default to neutral (0.5) — won
 
 Benchmarked on a 15 MB real-world corpus (Wikipedia, RFCs, Gutenberg, GitHub, MDN, Hacker News):
 
-| Operation | preembed | BeautifulSoup | LangChain | LlamaIndex |
-|---|---:|---:|---:|---:|
-| **Cleaning** | 110 ms | 1,643 ms | — | — |
-| **Chunking** | 31 ms | — | 1,467 ms | 1,465 ms |
-| **Full pipeline** | 543 ms | — | — | — |
+| Operation | Time |
+|---|---:|
+| **Cleaning** (15 MB HTML) | 110 ms |
+| **Chunking** (2 MB cleaned text) | 31 ms |
+| **Full pipeline** (clean + chunk + dedupe + score) | 543 ms |
 
-Cleaning is native-compiled. Deduplication uses an inverted fingerprint index — O(1) for exact/normalized matches.
-
-<details>
-<summary>More benchmark comparisons</summary>
-
-| Chunker | Time | Chunks | Quality |
-|---|---:|---:|---:|
-| preembed | 31 ms | 8,136 | 1.000 |
-| Chonkie | 103 ms | 8,994 | 0.975 |
-| semantic-text-splitter | 211 ms | 8,710 | 0.956 |
-| semchunk | 214 ms | 8,396 | 0.967 |
-| LangChain Recursive | 1,467 ms | 16,889 | 0.672 |
-| LlamaIndex Sentence | 1,465 ms | 16,889 | 0.672 |
-
-Quality scores are heuristic signals (length, density, structure, duplicates), not human relevance judgments. See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for methodology and caveats.
-
-</details>
+Native-compiled core. Deduplication uses an inverted fingerprint index — O(1) for exact/normalized matches.
 
 ## How it works
 
