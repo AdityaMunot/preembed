@@ -20,6 +20,7 @@ def _native_call(fn, *args, context: str = ""):
     except Exception as e:
         raise PreembedError(f"{context}: {e}") from e
 
+
 # --- Custom scorer registry ---
 
 _custom_scorers: list[tuple[str, float, object]] = []  # (name, weight, fn)
@@ -55,7 +56,9 @@ def clean_text(text: str) -> str:
         raise TypeError("clean_text() expects a string.")
 
     normalized = unicodedata.normalize("NFKC", text)
-    return _native_call(_core.clean_text, _unescape_if_needed(normalized), context="clean_text")
+    return _native_call(
+        _core.clean_text, _unescape_if_needed(normalized), context="clean_text"
+    )
 
 
 def _unescape_if_needed(text: str) -> str:
@@ -83,7 +86,14 @@ def chunk_text(
             text, chunk_size, overlap, preserve_headings, tokenizer
         )
 
-    return _native_call(_core.chunk_text, text, chunk_size, overlap, preserve_headings, context="chunk_text")
+    return _native_call(
+        _core.chunk_text,
+        text,
+        chunk_size,
+        overlap,
+        preserve_headings,
+        context="chunk_text",
+    )
 
 
 def _validate_chunk_config(text: str, chunk_size: int, overlap: int) -> None:
@@ -274,7 +284,11 @@ def dedupe_chunks(
 
     result = _native_call(
         _core.dedupe_chunks,
-        chunk_texts, near_duplicate_threshold, exact, normalized, near_duplicates,
+        chunk_texts,
+        near_duplicate_threshold,
+        exact,
+        normalized,
+        near_duplicates,
         context="dedupe_chunks",
     )
 
@@ -317,7 +331,9 @@ def score_chunks(chunks):
             score=item["score"],
             warnings=item["warnings"],
         )
-        for item in _native_call(_core.score_chunks, chunk_texts, context="score_chunks")
+        for item in _native_call(
+            _core.score_chunks, chunk_texts, context="score_chunks"
+        )
     ]
 
     if not _custom_scorers:

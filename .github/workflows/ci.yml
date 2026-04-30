@@ -77,28 +77,26 @@ jobs:
       - name: Verify import and quickstart
         run: |
           python -c "
+          import tempfile, pathlib
           from preembed import Pipeline, clean_text, chunk_text, dedupe_chunks, score_chunks, __version__
           print(f'preembed {__version__}')
 
-          # Clean
           cleaned = clean_text('<html><script>x</script><p>Hello world</p></html>')
           assert 'Hello world' in cleaned
           assert '<script>' not in cleaned
 
-          # Chunk
           chunks = chunk_text('word ' * 200, chunk_size=50, overlap=5)
           assert len(chunks) > 1
 
-          # Dedupe
           deduped = dedupe_chunks(['a b c'] * 3)
           assert len(deduped) == 1
 
-          # Score
           scored = score_chunks(['This is a test chunk with enough words for scoring.'])
           assert 0.0 <= scored[0].score <= 1.0
 
-          # Pipeline
-          result = Pipeline(chunk_size=50, overlap=5).run('word ' * 200)
+          tmp = pathlib.Path(tempfile.mkdtemp())
+          (tmp / 'test.txt').write_text('hello world ' * 50)
+          result = Pipeline(chunk_size=50, overlap=5).run(str(tmp))
           assert result.stats.total_chunks > 0
 
           print('all smoke tests passed')
