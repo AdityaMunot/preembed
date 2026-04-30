@@ -80,16 +80,6 @@ def domain_scorer(chunk: str) -> float:
 
 Blends with the built-in scoring engine. Errors default to neutral (0.5) — won't crash your pipeline.
 
-## Performance
-
-| Operation | Time |
-|---|---:|
-| **Cleaning** | 110 ms |
-| **Chunking** | 31 ms |
-| **Full pipeline** (clean + chunk + dedupe + score) | 543 ms |
-
-Native-compiled core. Deduplication uses an inverted fingerprint index — O(1) for exact/normalized matches.
-
 ## How it works
 
 | Stage | What it does |
