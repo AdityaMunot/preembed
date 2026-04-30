@@ -53,7 +53,6 @@ impl Default for DedupeConfig {
 struct RetainedRecord {
     index: usize,
     chunk: String,
-    normalized: String,
     fingerprint: HashSet<u64>,
 }
 
@@ -136,7 +135,6 @@ pub fn dedupe_chunks_with_config(chunks: &[String], config: DedupeConfig) -> Ded
         retained_records.push(RetainedRecord {
             index,
             chunk: chunk.clone(),
-            normalized,
             fingerprint,
         });
         retained_chunks.push(chunk.clone());
