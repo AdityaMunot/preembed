@@ -12,6 +12,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org)
+[![Rust](https://img.shields.io/badge/Rust-Powered-orange.svg)](https://www.rust-lang.org)
 
 ## Why
 
