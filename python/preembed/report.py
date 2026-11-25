@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from html import escape
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
-_FORMAT_HANDLERS = {}
+_FORMAT_HANDLERS: dict[str, Callable[[Any, str], None]] = {}
 
 
 def _register(suffixes: set[str]):

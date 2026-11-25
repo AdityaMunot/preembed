@@ -50,15 +50,20 @@ def clear_scorers() -> None:
     _custom_scorers.clear()
 
 
-def clean_text(text: str) -> str:
-    """Clean raw text or simple HTML into normalized text."""
+def clean_text(text: str, *, preserve_structure: bool = False) -> str:
+    """Clean raw text or simple HTML into normalized text.
+
+    With ``preserve_structure=True`` line and paragraph breaks are kept (HTML block
+    tags become paragraph breaks) so structure-aware chunking can use them.
+    """
     if not isinstance(text, str):
         raise TypeError("clean_text() expects a string.")
+    if not isinstance(preserve_structure, bool):
+        raise TypeError("preserve_structure must be a boolean.")
 
-    normalized = unicodedata.normalize("NFKC", text)
-    return _native_call(
-        _core.clean_text, _unescape_if_needed(normalized), context="clean_text"
-    )
+    normalized = _unescape_if_needed(unicodedata.normalize("NFKC", text))
+    native = _core.clean_text_structured if preserve_structure else _core.clean_text
+    return _native_call(native, normalized, context="clean_text")
 
 
 def _unescape_if_needed(text: str) -> str:
@@ -73,15 +78,14 @@ def chunk_text(
     *,
     mode: str = "word",
     tokenizer: Tokenizer | None = None,
-):
+) -> list[str]:
     """Split text into LLM-ready chunks."""
     _validate_chunk_config(text, chunk_size, overlap)
     if mode not in {"word", "token"}:
         raise ValueError("mode must be 'word' or 'token'.")
-    if mode == "token" and not callable(tokenizer):
-        raise TypeError("token mode requires a callable tokenizer.")
-
     if mode == "token":
+        if tokenizer is None or not callable(tokenizer):
+            raise TypeError("token mode requires a callable tokenizer.")
         return _chunk_text_by_tokens(
             text, chunk_size, overlap, preserve_headings, tokenizer
         )
@@ -204,6 +208,15 @@ def _split_words_by_token_count(
     current_words: list[str] = []
 
     for word in words:
+        if _token_count(word, tokenizer) > chunk_size:
+            _flush_words(chunks, current_words)
+            *full_pieces, last_piece = _split_oversized_word(
+                word, chunk_size, tokenizer
+            )
+            chunks.extend(full_pieces)
+            current_words = [last_piece]
+            continue
+
         if not current_words:
             current_words = [word]
             continue
@@ -224,6 +237,25 @@ def _split_words_by_token_count(
 
     _flush_words(chunks, current_words)
     return chunks
+
+
+def _split_oversized_word(
+    word: str, chunk_size: int, tokenizer: Tokenizer
+) -> list[str]:
+    # Binary-search the longest prefix that fits; a single character is the minimum piece.
+    pieces: list[str] = []
+    rest = word
+    while rest:
+        low, high = 1, len(rest)
+        while low < high:
+            middle = (low + high + 1) // 2
+            if _token_count(rest[:middle], tokenizer) <= chunk_size:
+                low = middle
+            else:
+                high = middle - 1
+        pieces.append(rest[:low])
+        rest = rest[low:]
+    return pieces
 
 
 def _token_overlap_words(

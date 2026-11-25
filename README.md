@@ -39,6 +39,41 @@ pip install -e ".[dev]"
 maturin develop --release
 ```
 
+## Validate your corpus in 60 seconds
+
+No code required. Point the CLI at a folder of `.md`, `.txt`, `.html`, `.log`, `.json`, or `.csv` files:
+
+```bash
+pip install preembed
+preembed check path/to/docs --report report.html
+```
+
+```
+documents:          6
+chunks:             6
+avg chunk size:     103.2 words
+duplicate ratio:    25.00%
+low quality:        0 (0.00%, score < 0.5)
+top warnings:       low_information_density=2
+
+worst chunks:
+  0.63  logs/worker.log#0  [low_information_density]
+        2026-11-25T10:00:00Z worker-1 status ok heartbeat ok 2026-11-25T10:01:00Z wor...
+  ...
+
+PASS
+```
+
+`preembed check` exits `0` when thresholds pass, `1` when they fail, and `2` on bad input, so it works as a CI gate:
+
+```bash
+preembed check docs/ --min-score 0.5 --max-low-quality-ratio 0.2 --max-duplicate-ratio 0.1
+preembed check docs/ --format json            # machine-readable summary
+preembed export docs/ -o chunks.jsonl --min-score 0.5   # streamed, one chunk per line
+```
+
+Try it on the bundled messy corpus in [`examples/`](examples/) (duplicates, HTML boilerplate, noisy logs).
+
 ## Quickstart
 
 ### Pipeline (recommended)
@@ -73,7 +108,7 @@ for batch in Pipeline().stream("huge_corpus/", batch_size=50):
     upload_to_vector_db(batch.scored_chunks)
 ```
 
-Cross-batch deduplication included. Processes one batch at a time — constant memory regardless of corpus size.
+Documents are read and processed one batch at a time. Exact and normalized duplicates are removed across batches (near-duplicates within a batch); the cross-batch filter keeps a 16-byte hash per unique chunk, so memory grows with unique chunks, not with document size. A batch whose chunks were all duplicates is still yielded with no chunks, `duplicate_ratio == 1.0`, and the warning `all_chunks_duplicate`.
 
 ### Custom scoring
 
@@ -91,8 +126,8 @@ Blends with the built-in scoring engine. Errors default to neutral (0.5) — won
 
 | Stage | What it does |
 |---|---|
-| **Clean** | Strip HTML, scripts, styles. Normalize whitespace and unicode. |
-| **Chunk** | Structure-aware splitting. Preserves headings, code blocks, paragraphs. Configurable size + overlap. |
+| **Clean** | Strip HTML tags plus `script`, `style`, `nav`, `footer`, `noscript`, `template`, and `svg` blocks. Normalize whitespace and unicode. In the pipeline, paragraph and block boundaries are kept for chunking. |
+| **Chunk** | Structure-aware splitting on headings, code fences, and paragraphs. Never exceeds `chunk_size` words (or tokens in token mode). Configurable overlap. |
 | **Dedupe** | Exact, normalized, and near-duplicate removal via fingerprint similarity. |
 | **Score** | Quality score (0–1) based on length, density, structure, duplicates. Warning labels for boilerplate, too-short/long, low-density. |
 | **Report** | JSON, Markdown, or HTML diagnostics with per-chunk scores and recommendations. |
@@ -101,7 +136,7 @@ Blends with the built-in scoring engine. Errors default to neutral (0.5) — won
 
 ```python
 # Core primitives
-clean_text(text: str) -> str
+clean_text(text: str, *, preserve_structure=False) -> str
 chunk_text(text: str, chunk_size=512, overlap=64, mode="word", tokenizer=None) -> list[str]
 dedupe_chunks(chunks, return_stats=False, near_duplicate_threshold=0.9) -> list[str] | DedupeResult
 score_chunks(chunks) -> list[Chunk]
@@ -116,12 +151,26 @@ register_scorer(name, weight=0.1)(fn)
 clear_scorers()
 ```
 
+### CLI
+
+```text
+preembed check SOURCE [--chunk-size N] [--overlap N] [--no-clean] [--no-dedupe]
+                      [--min-score F] [--max-low-quality-ratio F] [--max-duplicate-ratio F]
+                      [--report PATH] [--format text|json]
+preembed export SOURCE -o OUT.jsonl [--chunk-size N] [--overlap N] [--no-clean]
+                      [--no-dedupe] [--min-score F]
+```
+
+Chunk offsets (`start_offset`/`end_offset`) index into `clean_text(document, preserve_structure=True)`, or the raw document when `clean=False`.
+
 ## Development
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev,lint]"
 pytest
+cargo test --manifest-path rust/Cargo.toml
+ruff check python tests examples && mypy python
 ```
 
 ## License

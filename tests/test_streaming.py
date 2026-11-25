@@ -121,3 +121,18 @@ def test_stream_all_empty_files(tmp_path: Path):
 
     batches = list(Pipeline().stream(str(tmp_path), batch_size=2))
     assert batches == []
+
+
+def test_stream_reports_batches_removed_by_cross_batch_dedupe(tmp_path: Path):
+    content = "identical content for every file in the corpus " * 40
+    for i in range(4):
+        (tmp_path / f"dup{i}.txt").write_text(content, encoding="utf-8")
+
+    batches = list(
+        Pipeline(chunk_size=64, overlap=8).stream(str(tmp_path), batch_size=2)
+    )
+
+    assert sum(b.stats.total_documents for b in batches) == 4
+    assert batches[1].chunks == []
+    assert batches[1].stats.duplicate_ratio == 1.0
+    assert batches[1].warnings == ["all_chunks_duplicate"]

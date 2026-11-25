@@ -311,7 +311,7 @@ def test_pipeline_runs_on_file(tmp_path):
     assert result.chunk_metadata[0].chunk_index == 0
     assert result.chunk_metadata[0].start_offset == 0
     assert result.chunk_metadata[0].end_offset == len(
-        clean_text(source.read_text(encoding="utf-8"))
+        clean_text(source.read_text(encoding="utf-8"), preserve_structure=True)
     )
 
 
@@ -334,16 +334,61 @@ def test_pipeline_runs_on_folder(tmp_path):
 
 def test_pipeline_offsets_reference_cleaned_text():
     source = "<h1>Title</h1><p>Alpha &amp; Beta</p>"
-    cleaned = clean_text(source)
+    cleaned = clean_text(source, preserve_structure=True)
 
     result = Pipeline(chunk_size=10, overlap=0).run(source)
 
-    assert result.chunks == [cleaned]
+    assert cleaned == "Title\n\nAlpha & Beta"
+    assert result.chunks == ["Title Alpha & Beta"]
     assert result.chunk_metadata[0].source_document == "<text>"
     assert result.chunk_metadata[0].start_offset == 0
     assert result.chunk_metadata[0].end_offset == len(cleaned)
     assert result.scored_chunks[0].start_offset == 0
     assert result.scored_chunks[0].end_offset == len(cleaned)
+
+
+def test_clean_text_preserve_structure_keeps_blocks():
+    source = "<h2>Setup</h2><p>Install   it.</p><ul><li>one</li><li>two</li></ul>"
+
+    assert (
+        clean_text(source, preserve_structure=True)
+        == "Setup\n\nInstall it.\n\none\ntwo"
+    )
+    assert clean_text(source) == "Setup Install it. one two"
+
+
+def test_pipeline_chunks_split_on_structure_from_html():
+    paragraph_a = " ".join(f"a{i}" for i in range(6))
+    paragraph_b = " ".join(f"b{i}" for i in range(6))
+    source = f"<p>{paragraph_a}</p><p>{paragraph_b}</p>"
+
+    result = Pipeline(chunk_size=8, overlap=0, dedupe=False, score=False).run(source)
+
+    # Before structured cleaning, the paragraphs were flattened and split mid-paragraph.
+    assert result.chunks == [paragraph_a, paragraph_b]
+
+
+def test_chunk_text_never_exceeds_chunk_size_across_paragraphs():
+    chunks = chunk_text("one two three four\n\nfive six seven eight", 5, 4)
+
+    assert chunks == ["one two three four", "four five six seven eight"]
+    assert all(len(chunk.split()) <= 5 for chunk in chunks)
+
+
+def test_chunk_text_token_mode_splits_oversized_word():
+    def char_tokenizer(text: str) -> list[str]:
+        return list(text)
+
+    chunks = chunk_text(
+        "supercalifragilistic ok",
+        chunk_size=6,
+        overlap=0,
+        mode="token",
+        tokenizer=char_tokenizer,
+    )
+
+    assert chunks == ["superc", "alifra", "gilist", "ic ok"]
+    assert all(len(char_tokenizer(chunk)) <= 6 for chunk in chunks)
 
 
 def test_pipeline_offsets_reference_raw_text_when_cleaning_disabled():
@@ -436,3 +481,16 @@ def test_pipeline_saves_html_report(tmp_path):
     assert "preembed Diagnostics Report" in content
     assert "Offsets:" in content
     assert "&lt;world&gt;" not in content
+
+
+def test_pipeline_offsets_slice_structured_text_across_paragraphs():
+    paragraphs = [" ".join(f"p{p}w{i}" for i in range(7)) for p in range(6)]
+    source = "\n\n".join(paragraphs)
+    prepared = clean_text(source, preserve_structure=True)
+
+    result = Pipeline(chunk_size=10, overlap=3, dedupe=False, score=False).run(source)
+
+    assert len(result.chunks) > 1
+    for chunk, metadata in zip(result.chunks, result.chunk_metadata, strict=True):
+        span = prepared[metadata.start_offset : metadata.end_offset]
+        assert span.split() == chunk.split()

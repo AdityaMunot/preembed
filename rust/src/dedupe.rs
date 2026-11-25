@@ -56,6 +56,14 @@ struct RetainedRecord {
     fingerprint: HashSet<u64>,
 }
 
+#[derive(Debug, Default)]
+struct LookupIndex {
+    exact: HashMap<String, usize>,
+    normalized: HashMap<String, usize>,
+    // Fingerprint hash -> retained record indices containing it.
+    fingerprint: HashMap<u64, Vec<usize>>,
+}
+
 #[derive(Debug, Clone)]
 struct DuplicateMatch {
     retained_index: usize,
@@ -83,11 +91,7 @@ pub fn dedupe_chunks_with_config(chunks: &[String], config: DedupeConfig) -> Ded
     let mut duplicate_groups: Vec<DuplicateGroup> = Vec::new();
     let mut group_index: HashMap<usize, usize> = HashMap::new(); // retained_index → groups vec index
 
-    // O(1) lookup indices for exact and normalized matching.
-    let mut exact_index: HashMap<String, usize> = HashMap::new();
-    let mut normalized_index: HashMap<String, usize> = HashMap::new();
-    // Inverted index: fingerprint hash → list of retained record indices that contain it.
-    let mut fingerprint_index: HashMap<u64, Vec<usize>> = HashMap::new();
+    let mut lookup = LookupIndex::default();
 
     for (index, chunk) in chunks.iter().enumerate() {
         let normalized = normalize_for_dedupe(chunk);
@@ -98,9 +102,7 @@ pub fn dedupe_chunks_with_config(chunks: &[String], config: DedupeConfig) -> Ded
             &normalized,
             &fingerprint,
             &retained_records,
-            &exact_index,
-            &normalized_index,
-            &fingerprint_index,
+            &lookup,
             &config,
         ) {
             removed_chunks.push(chunk.clone());
@@ -119,16 +121,15 @@ pub fn dedupe_chunks_with_config(chunks: &[String], config: DedupeConfig) -> Ded
 
         let record_index = retained_records.len();
 
-        // Insert into lookup indices.
         if config.exact {
-            exact_index.entry(chunk.clone()).or_insert(record_index);
+            lookup.exact.entry(chunk.clone()).or_insert(record_index);
         }
         if config.normalized && !normalized.is_empty() {
-            normalized_index.entry(normalized.clone()).or_insert(record_index);
+            lookup.normalized.entry(normalized.clone()).or_insert(record_index);
         }
         if config.near_duplicates {
             for &hash in &fingerprint {
-                fingerprint_index.entry(hash).or_default().push(record_index);
+                lookup.fingerprint.entry(hash).or_default().push(record_index);
             }
         }
 
@@ -204,21 +205,19 @@ fn find_duplicate_indexed(
     normalized: &str,
     fingerprint: &HashSet<u64>,
     retained_records: &[RetainedRecord],
-    exact_index: &HashMap<String, usize>,
-    normalized_index: &HashMap<String, usize>,
-    fingerprint_index: &HashMap<u64, Vec<usize>>,
+    lookup: &LookupIndex,
     config: &DedupeConfig,
 ) -> Option<DuplicateMatch> {
     // O(1) exact lookup.
     if config.exact {
-        if let Some(&record_idx) = exact_index.get(chunk) {
+        if let Some(&record_idx) = lookup.exact.get(chunk) {
             return Some(duplicate_match(&retained_records[record_idx], "exact", 1.0));
         }
     }
 
     // O(1) normalized lookup.
     if config.normalized && !normalized.is_empty() {
-        if let Some(&record_idx) = normalized_index.get(normalized) {
+        if let Some(&record_idx) = lookup.normalized.get(normalized) {
             return Some(duplicate_match(&retained_records[record_idx], "normalized", 1.0));
         }
     }
@@ -230,7 +229,7 @@ fn find_duplicate_indexed(
     // Inverted index: collect candidate records that share at least one fingerprint hash.
     let mut candidate_hits: HashMap<usize, usize> = HashMap::new();
     for hash in fingerprint {
-        if let Some(record_indices) = fingerprint_index.get(hash) {
+        if let Some(record_indices) = lookup.fingerprint.get(hash) {
             for &record_idx in record_indices {
                 *candidate_hits.entry(record_idx).or_insert(0) += 1;
             }
