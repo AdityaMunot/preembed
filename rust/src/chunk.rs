@@ -1,10 +1,10 @@
 pub fn chunk_text(text: &str, chunk_size: usize, overlap: usize, preserve_headings: bool) -> Vec<String> {
     let units = split_structural_units(text, preserve_headings);
     let mut chunks = Vec::new();
-    let mut current_words: Vec<String> = Vec::new();
+    let mut current_words: Vec<&str> = Vec::new();
 
-    for unit in units {
-        let unit_words: Vec<String> = unit.split_whitespace().map(str::to_string).collect();
+    for unit in &units {
+        let unit_words: Vec<&str> = unit.split_whitespace().collect();
         if unit_words.is_empty() {
             continue;
         }
@@ -17,13 +17,12 @@ pub fn chunk_text(text: &str, chunk_size: usize, overlap: usize, preserve_headin
         }
 
         if !current_words.is_empty() && current_words.len() + unit_words.len() > chunk_size {
-            let previous = current_words.clone();
             flush_words(&mut chunks, &current_words);
-            current_words = if overlap > 0 {
-                previous[previous.len().saturating_sub(overlap)..].to_vec()
-            } else {
-                Vec::new()
-            };
+            // Shrink the overlap tail so overlap + next unit still fits in chunk_size.
+            let keep = overlap
+                .min(chunk_size - unit_words.len())
+                .min(current_words.len());
+            current_words.drain(..current_words.len() - keep);
         }
 
         current_words.extend(unit_words);
@@ -90,7 +89,7 @@ fn push_unit(units: &mut Vec<String>, lines: &[&str]) {
     }
 }
 
-fn split_words(words: &[String], chunk_size: usize, overlap: usize) -> Vec<String> {
+fn split_words(words: &[&str], chunk_size: usize, overlap: usize) -> Vec<String> {
     let overlap = overlap.min(chunk_size.saturating_sub(1));
     let mut chunks = Vec::new();
     let mut start = 0;
@@ -107,8 +106,28 @@ fn split_words(words: &[String], chunk_size: usize, overlap: usize) -> Vec<Strin
     chunks
 }
 
-fn flush_words(chunks: &mut Vec<String>, words: &[String]) {
+fn flush_words(chunks: &mut Vec<String>, words: &[&str]) {
     if !words.is_empty() {
         chunks.push(words.join(" "));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::chunk_text;
+
+    #[test]
+    fn overlap_is_trimmed_to_respect_chunk_size_across_units() {
+        let chunks = chunk_text("one two three four\n\nfive six seven eight", 5, 4, true);
+
+        assert_eq!(chunks, vec!["one two three four", "four five six seven eight"]);
+        assert!(chunks.iter().all(|c| c.split_whitespace().count() <= 5));
+    }
+
+    #[test]
+    fn overlap_is_dropped_when_next_unit_fills_chunk() {
+        let chunks = chunk_text("alpha beta\n\ngamma delta epsilon", 3, 2, true);
+
+        assert_eq!(chunks, vec!["alpha beta", "gamma delta epsilon"]);
     }
 }

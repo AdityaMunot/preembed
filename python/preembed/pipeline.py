@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from bisect import bisect_left
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,7 +50,7 @@ class Pipeline:
         for doc_index, document in enumerate(documents):
             if progress:
                 progress("clean", doc_index + 1, len(documents))
-            prepared = clean_text(document.text) if self.clean else document.text
+            prepared = self._prepare(document.text)
             chunks = chunk_text(
                 prepared, chunk_size=self.chunk_size, overlap=self.overlap
             )
@@ -136,8 +137,8 @@ class Pipeline:
             return
 
         total_files = len(file_list)
-        seen_raw: set[str] = set()
-        seen_norm: set[str] = set()
+        seen_raw: set[bytes] = set()
+        seen_norm: set[bytes] = set()
 
         for batch_start in range(0, total_files, batch_size):
             batch_files = file_list[batch_start : batch_start + batch_size]
@@ -153,12 +154,14 @@ class Pipeline:
                     else file_path.name
                 )
                 text = _read_text_file(file_path)
-                prepared = clean_text(text) if self.clean else text
+                prepared = self._prepare(text)
                 chunks = chunk_text(
                     prepared, chunk_size=self.chunk_size, overlap=self.overlap
                 )
                 batch_chunks.extend(chunks)
                 batch_metadata.extend(_chunk_metadata(doc_name, prepared, chunks))
+
+            produced_count = len(batch_chunks)
 
             # Cross-batch dedupe: filter exact and normalized duplicates from prior batches.
             if self.dedupe and (seen_raw or seen_norm):
@@ -181,7 +184,6 @@ class Pipeline:
                     seen_norm.add(_normalized_hash(chunk))
 
             # Within-batch dedupe via Rust.
-            duplicate_ratio = 0.0
             if self.dedupe and batch_chunks:
                 batch_num = batch_start // batch_size + 1
                 total_batches = -(-total_files // batch_size)
@@ -192,10 +194,13 @@ class Pipeline:
                     batch_chunks, batch_metadata, dedupe_result.retained_chunks
                 )
                 batch_chunks = dedupe_result.retained_chunks
-                duplicate_ratio = dedupe_result.duplicate_ratio
 
-            if not batch_chunks:
+            if produced_count == 0:
                 continue
+
+            # Ratio covers both cross-batch and within-batch removals.
+            duplicate_ratio = (produced_count - len(batch_chunks)) / produced_count
+            batch_warnings = [] if batch_chunks else ["all_chunks_duplicate"]
 
             batch_num = batch_start // batch_size + 1
             total_batches = -(-total_files // batch_size)
@@ -209,8 +214,10 @@ class Pipeline:
             low_quality_count = sum(
                 1 for c in scored_chunks if c.score is not None and c.score < 0.5
             )
-            average_chunk_size = sum(len(c.split()) for c in batch_chunks) / len(
-                batch_chunks
+            average_chunk_size = (
+                sum(len(c.split()) for c in batch_chunks) / len(batch_chunks)
+                if batch_chunks
+                else 0.0
             )
 
             yield PipelineResult(
@@ -224,8 +231,12 @@ class Pipeline:
                     low_quality_chunk_count=low_quality_count,
                 ),
                 chunk_metadata=batch_metadata,
-                warnings=[],
+                warnings=batch_warnings,
             )
+
+    def _prepare(self, text: str) -> str:
+        # Keep line structure so chunk_text can split on headings, paragraphs, and code fences.
+        return clean_text(text, preserve_structure=True) if self.clean else text
 
     def _validate_config(self) -> None:
         if self.chunk_size <= 0:
@@ -296,8 +307,7 @@ def _chunk_metadata(
     source_document: str, source_text: str, chunks: list[str]
 ) -> list[ChunkMetadata]:
     metadata: list[ChunkMetadata] = []
-    # Pre-parse source words once instead of per-chunk.
-    source_words = list(re.finditer(r"\S+", source_text))
+    source_words = _SourceWords(source_text)
     previous_start = -1
 
     for chunk_index, chunk in enumerate(chunks):
@@ -320,26 +330,42 @@ def _chunk_metadata(
     return metadata
 
 
-def _find_chunk_offsets(
-    source_text: str, chunk: str, *, source_words: list, minimum_start: int
-) -> tuple[int, int]:
-    exact_start = source_text.find(chunk, minimum_start)
-    if exact_start >= 0:
-        return exact_start, exact_start + len(chunk)
+class _SourceWords:
+    """Whitespace-delimited words of a document with their character spans."""
 
+    __slots__ = ("ends", "starts", "texts")
+
+    def __init__(self, text: str) -> None:
+        matches = list(re.finditer(r"\S+", text))
+        self.texts = [match.group(0) for match in matches]
+        self.starts = [match.start() for match in matches]
+        self.ends = [match.end() for match in matches]
+
+
+def _find_chunk_offsets(
+    source_text: str,
+    chunk: str,
+    *,
+    source_words: _SourceWords,
+    minimum_start: int,
+) -> tuple[int, int]:
     chunk_words = chunk.split()
     if not chunk_words:
         return minimum_start, minimum_start
 
-    for source_index, source_word in enumerate(source_words):
-        if source_word.start() < minimum_start:
-            continue
-        end_index = source_index + len(chunk_words)
-        if end_index > len(source_words):
+    # Chunks are whole-word sequences, so start at the cursor instead of rescanning the text.
+    texts = source_words.texts
+    width = len(chunk_words)
+    first = chunk_words[0]
+    for index in range(bisect_left(source_words.starts, minimum_start), len(texts)):
+        if index + width > len(texts):
             break
-        candidate = source_words[source_index:end_index]
-        if [match.group(0) for match in candidate] == chunk_words:
-            return candidate[0].start(), candidate[-1].end()
+        if texts[index] == first and texts[index : index + width] == chunk_words:
+            return source_words.starts[index], source_words.ends[index + width - 1]
+
+    exact_start = source_text.find(chunk, minimum_start)
+    if exact_start >= 0:
+        return exact_start, exact_start + len(chunk)
 
     # Offset lookup failed; fall back to a zero-width marker at the search cursor.
     fallback = max(0, minimum_start)
@@ -379,10 +405,10 @@ def _attach_metadata(
     return scored_chunks
 
 
-def _content_hash(text: str) -> str:
-    return hashlib.blake2b(text.encode("utf-8"), digest_size=16).hexdigest()
+def _content_hash(text: str) -> bytes:
+    return hashlib.blake2b(text.encode("utf-8"), digest_size=16).digest()
 
 
-def _normalized_hash(text: str) -> str:
+def _normalized_hash(text: str) -> bytes:
     normalized = " ".join(text.casefold().split())
-    return hashlib.blake2b(normalized.encode("utf-8"), digest_size=16).hexdigest()
+    return hashlib.blake2b(normalized.encode("utf-8"), digest_size=16).digest()

@@ -19,6 +19,11 @@ fn clean_text(text: &str) -> String {
 }
 
 #[pyfunction]
+fn clean_text_structured(text: &str) -> String {
+    clean::clean_text_structured(text)
+}
+
+#[pyfunction]
 fn chunk_text(text: &str, chunk_size: usize, overlap: usize, preserve_headings: bool) -> PyResult<Vec<String>> {
     if chunk_size == 0 {
         return Err(PreembedError::InvalidConfig {
@@ -131,6 +136,7 @@ fn score_chunks(py: Python<'_>, chunks: Vec<String>) -> PyResult<PyObject> {
 fn preembed_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(normalize_whitespace, module)?)?;
     module.add_function(wrap_pyfunction!(clean_text, module)?)?;
+    module.add_function(wrap_pyfunction!(clean_text_structured, module)?)?;
     module.add_function(wrap_pyfunction!(chunk_text, module)?)?;
     module.add_function(wrap_pyfunction!(dedupe_chunks, module)?)?;
     module.add_function(wrap_pyfunction!(score_chunks, module)?)?;
@@ -258,7 +264,7 @@ mod proptest_fuzz {
 
         #[test]
         fn chunk_text_respects_size(
-            s in "([a-z]{1,10} ){5,200}",
+            s in "(([a-z]{1,10} ){1,30}\n\n){1,20}",
             chunk_size in 2usize..200,
             overlap in 0usize..50,
         ) {
